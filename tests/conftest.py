@@ -1,10 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
+from http import HTTPStatus
 from ftt.app import app
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from ftt.models import table_registry, User
+from ftt.database import get_session
 
 
 @pytest.fixture()
@@ -31,6 +33,8 @@ def session():
         yield session
     table_registry.metadata.drop_all(engine)
 
+from ftt.security import get_password_hash
+
 @pytest.fixture()
 def user(session):
     user = User(username='Teste', email='teste@test.com', password='123456')
@@ -39,4 +43,18 @@ def user(session):
     session.commit()
     session.refresh(user)
 
+    print("Usuário criado:", user.__dict__)  # Verifique se o usuário foi persistido corretamente
     return user
+
+
+
+@pytest.fixture()
+def token(client, user):
+    response = client.post(
+        '/token',
+        data={'username': user.email, 'password': user.password},
+    )
+    print("Resposta do /token:", response.status_code, response.json())  # Debug
+    return response.json().get('access_token')  # Use .get() para evitar erro caso a chave não exista
+
+

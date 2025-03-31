@@ -1,9 +1,12 @@
 import pytest
 from http import HTTPStatus
 from fastapi.testclient import TestClient
+from jwt import decode
+
 from ftt.schemas import UserPublic
 from ftt.app import app
 from ftt.database import get_session
+from ftt.security import ALGORITHM, SECRET_KEY, create_access_token
 
 
 @pytest.fixture()
@@ -17,15 +20,29 @@ def client(session):
         del app.dependency_overrides[get_session]
 
 
-def test_pagina_inicial(client: TestClient):
-    response = client.get("/")  # Act (agir)
+@pytest.fixture()
+def user():
+    return {
+        "id": 1,
+        "username": "Teste",
+        "password": "123456",
+        "email": "teste@test.com",
+    }
 
-    assert response.status_code == HTTPStatus.OK  # Assert (afirmar)
-    assert response.json() == {"message": "Olá, seja bem vindo !"}  # Assert (afirmar)
+
+@pytest.fixture()
+def token(user):
+    return create_access_token({"sub": user["email"]})
+
+
+def test_pagina_inicial(client: TestClient):
+    response = client.get("/")
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {"message": "Olá, seja bem vindo !"}
 
 
 def test_create_user(client):
-    response = client.post(  # Act (agir)
+    response = client.post(
         "/users/",
         json={
             "username": "rukasuleonhart",
@@ -33,48 +50,45 @@ def test_create_user(client):
             "email": "rukasuleonhart@gmail.com",
         },
     )
-
-    assert response.status_code == HTTPStatus.CREATED  # Assert (afirmar)
+    
+    assert response.status_code == HTTPStatus.CREATED
     user_data = response.json()
-    assert "id" in user_data  # O id gerado automaticamente pelo banco de dados
+    assert "id" in user_data
     assert user_data["username"] == "rukasuleonhart"
     assert user_data["email"] == "rukasuleonhart@gmail.com"
-    return user_data["id"]  # Retorna o ID criado para uso posterior
 
 
-def test_read_users(client):
-    response = client.get("/users/")  # Act (agir)
-
-    assert response.status_code == HTTPStatus.OK  # Assert (afirmar)
-    assert response.json() == {"users": []}  # Assert (afirmar)
-
-
-def test_read_users_with_user(client, user):
-    user_schema = UserPublic.model_validate(user).model_dump()
-    response = client.get("/users/")  # Act (agir)
-
-    assert response.status_code == HTTPStatus.OK  # Assert (afirmar)
-    assert response.json() == {"users": [user_schema]}  # Assert (afirmar)
-
-
-def test_update_user(client):
-    # Criação do usuário antes de tentar a atualização
-    user_id = test_create_user(client)
-    
-    # Agora tentamos a atualização usando o ID retornado
-    response = client.put(  # Act (agir)
-        f'/users/{user_id}',  # Usa o ID criado dinamicamente
-        json={
-            "id": user_id,
-            "username": "rukasuleonhart2",
-            "password": "ruka102030",
-            "email": "rukasuleonhart2@gmail.com",
-        },
+def test_read_users(client, token, user):
+    response = client.get(
+        "/users/",
+        headers={"Authorization": f"Bearer {token}"}
     )
-
-    assert response.status_code == HTTPStatus.OK  # Assert (afirmar)
-    assert response.json() == {  # Assert (afirmar)
-            "id": user_id,
-            "username": "rukasuleonhart2",
-            "email": "rukasuleonhart2@gmail.com",
+    
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {"users": [
+        {
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
         }
+    ]}
+
+
+def test_update_user(client, user, token):
+    response = client.put(
+        f'/users/{user["id"]}',
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "username": "bob",
+            "email": "bob@test.com",
+            "password": "mynewpassword",
+            "id": user["id"],
+        }
+    )
+    
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {
+        "username": "bob",
+        "email": "bob@test.com",
+        "id": user["id"],
+    }

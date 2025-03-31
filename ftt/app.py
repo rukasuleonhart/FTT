@@ -7,16 +7,34 @@ from ftt.schemas import BlocoSchema, MessageSchema, SalaSchema, UserPublic, User
 from ftt.settings import Settings
 from ftt.database import get_session
 from ftt.models import User
-from ftt.security import get_password_hash, verify_password
+from ftt.security import get_password_hash, verify_password, create_access_token, get_current_user
 
 app = FastAPI()
+
+# GET
 
 @app.get("/", status_code=HTTPStatus.OK, response_model=MessageSchema)
 def pagina_inicial():
     return {'message': 'Olá, seja bem vindo !'}
 
+@app.get('/users/', response_model=UserList)
+def read_users(
+    limit: int = 10, # limitador de usuários
+    offset: int = 0, # onde começa a busca
+    session=Depends(get_session)
+):
+    user = session.scalars(
+        select(User).limit(limit).offset(offset)
+    )
+    return {'users': user}
+
+# POST
+
 @app.post('/users/', status_code=HTTPStatus.CREATED , response_model=UserPublic)
-def create_user(user: UserSchema, session=Depends(get_session)):
+def create_user(
+    user: UserSchema, 
+    session=Depends(get_session),
+):
 
     db_user = session.scalar(select(User).where(User.username == user.username))
     if db_user:
@@ -44,57 +62,6 @@ def create_user(user: UserSchema, session=Depends(get_session)):
 
     return db_user
 
-    
-    
-@app.post('/cadastro_bloco/', status_code=HTTPStatus.CREATED, response_model=BlocoSchema)
-def cadastro_bloco(bloco=BlocoSchema):
-    return bloco
-
-@app.post('/cadastro_sala/', status_code=HTTPStatus.CREATED, response_model=SalaSchema)
-def cadastro_sala(sala=SalaSchema):
-    return sala
-
-@app.get('/users/', response_model=UserList)
-def read_users(
-    limit: int = 10, # limitador de usuários
-    offset: int = 0, # onde começa a busca
-    session=Depends(get_session)
-):
-    user = session.scalars(
-        select(User).limit(limit).offset(offset)
-    )
-    return {'users': user}
-
-@app.put('/users/{user_id}', response_model=UserPublic)
-def update_user(user_id: int, user: UserSchema, session=Depends(get_session)):
-    db_user = session.scalar(select(User).where(User.id == user_id))
-    if not db_user:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="Usuário não encontrado"
-        )
-    db_user.email = user.email
-    db_user.username = user.username
-    db_user.password = get_password_hash(user.password)
-
-    session.add(db_user)
-    session.commit()
-    session.refresh(db_user)
-
-    return db_user
-   
-@app.delete('/users/{user_id}', status_code=HTTPStatus.OK, response_model=MessageSchema)
-def delete_user(user_id: int, session=Depends(get_session)):
-    db_user = session.scalar(select(User).where(User.id == user_id))
-    if not db_user:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail='Usuário não encontrado',
-        )
-    session.delete(db_user)
-    session.commit()
-
-    return {'message': 'Usuário deletado'}
-
 @app.post('/token', response_model=TokenSchema)
 def login_for_access_token(
     session=Depends(get_session),
@@ -107,5 +74,44 @@ def login_for_access_token(
         raise HTTPException(
             status_code=400, detail='Incorrect username or password'
         )
-    verify_password()
-    
+    access_token = create_access_token(data_payload={'sub': user.username})
+
+    return {'access_token': access_token, 'token_type': 'Bearer'}
+
+# PUT
+
+@app.put('/users/{user_id}', response_model=UserPublic)
+def update_user(
+    user_id: int, 
+    user: UserSchema, 
+    session=Depends(get_session),
+    current_user=Depends(get_current_user), # Verifica se o usuário esta lougado.
+):
+    if current_user.id != user_id:
+        raise HTTPException(status_code=400, detail='Você não tem permissão')
+
+    current_user.email = user.email
+    current_user.username = user.username
+    current_user.password = get_password_hash(user.password)
+
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+
+    return current_user
+   
+# DELETE
+
+@app.delete('/users/{user_id}', status_code=HTTPStatus.OK, response_model=MessageSchema)
+def delete_user(
+    user_id: int, 
+    session=Depends(get_session),
+    current_user=Depends(get_current_user), # Verifica se o usuário esta lougado.
+):
+    if current_user.id != user_id:
+        raise HTTPException(status_code=400, detail='Você não tem permissão')
+
+    session.delete(current_user)
+    session.commit()
+
+    return {'message': 'Usuário deletado'}
