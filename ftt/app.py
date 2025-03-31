@@ -1,11 +1,13 @@
 from http import HTTPStatus
 from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy import select
+from fastapi.security import OAuth2PasswordRequestForm
 
-from ftt.schemas import BlocoSchema, MessageSchema, SalaSchema, UserPublic, UserSchema, UserDB, UserList
+from ftt.schemas import BlocoSchema, MessageSchema, SalaSchema, UserPublic, UserSchema, UserList, TokenSchema
 from ftt.settings import Settings
 from ftt.database import get_session
 from ftt.models import User
+from ftt.security import get_password_hash, verify_password
 
 app = FastAPI()
 
@@ -32,7 +34,7 @@ def create_user(user: UserSchema, session=Depends(get_session)):
 
     db_user = User(
         username=user.username, 
-        password=user.password, 
+        password=get_password_hash(user.password), 
         email=user.email,
     )
 
@@ -72,7 +74,7 @@ def update_user(user_id: int, user: UserSchema, session=Depends(get_session)):
         )
     db_user.email = user.email
     db_user.username = user.username
-    db_user.password = user.password
+    db_user.password = get_password_hash(user.password)
 
     session.add(db_user)
     session.commit()
@@ -92,4 +94,18 @@ def delete_user(user_id: int, session=Depends(get_session)):
     session.commit()
 
     return {'message': 'Usuário deletado'}
+
+@app.post('/token', response_model=TokenSchema)
+def login_for_access_token(
+    session=Depends(get_session),
+    form_data: OAuth2PasswordRequestForm = Depends()  
+):
+    user = session.scalar(select(User).where(User.username == form_data.username)
+    )
+
+    if not user or not verify_password(form_data.password, user.password):
+        raise HTTPException(
+            status_code=400, detail='Incorrect username or password'
+        )
+    verify_password()
     
