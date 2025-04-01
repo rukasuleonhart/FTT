@@ -35,10 +35,15 @@ select = ['I', 'F', 'E', 'W', 'PL', 'PT']
 pytest = "^8.3.5"
 pytest-cov = "^6.0.0"
 taskipy = "^1.14.1"
+ruff = "^0.11.2"
 
 [tool.taskipy.tasks]
-run = 'fastapi dev ftt/app.py'
-test = 'pytest -s -x --cov=ftt -vv'
+lint = 'ruff check'
+pre_format = 'ruff check --fix'
+format = 'ruff format'
+run = 'poetry run uvicorn ftt.app:app --reload'
+pre_test = 'task lint'
+test = 'pytest -s -x --cov=fast_zero -vv'
 post_test = 'coverage html'
 
 [build-system]

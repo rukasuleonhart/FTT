@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime
 from pydantic import BaseModel, EmailStr, ConfigDict
 
 # Mensagem
@@ -6,25 +6,24 @@ class MessageSchema(BaseModel):
     message: str
 
 # Salas
-class SalaSchema(BaseModel):
-    bloco_id: int
-    nome: str
-    capacidade: int
-    recurso: str
+class RoomSchema(BaseModel):
+    block_id: int
+    name: str
+    capacity: int
+    resource: str
 
 #Blocos
-class BlocoSchema(BaseModel):
-    nome: str
-    identificador: str
+class BlockSchema(BaseModel):
+    name: str
+    identifier: str
 
 # Reversas
-class ReservaSchema(BaseModel):
-    sala_id: int
-    data: datetime
-    hora_inicio: time
-    hora_fim: time
-    coordenador: str
-    motivo: str
+class ReservationSchema(BaseModel):
+    room_id: int
+    start_time: datetime
+    end_time: datetime
+    coordinator: str
+    reason: str
     status: str
 
 # Usuário de entrada
@@ -45,9 +44,6 @@ class TokenSchema(BaseModel):
     access_token: str
     token_type: str
 
-# Teste
-class UserDB(UserSchema):
-    id: int
-
+# Transforma Dicionario em Lista
 class UserList(BaseModel):
     users: list[UserPublic]
