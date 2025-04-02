@@ -1,1 +1,1 @@
-run = 'fastapi dev ftt/app.py'
+digite 'fastapi dev ftt/app.py' no console para rodar
