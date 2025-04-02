@@ -1,38 +1,38 @@
-# ==============================================================================================================================#
- #                                            📚 B I B L I O T E C A S                                                         #               
-# ==============================================================================================================================#
+from http import HTTPStatus
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-# ==============================================================================================================================#
- #                                            ⬇️  I M P O R T S                                                                #
-# ==============================================================================================================================#
-from ftt.schemas import TokenSchema
-from ftt.database import get_session
+from ftt.database import get_db  # Alterado para usar get_db corretamente
 from ftt.models import User
-from ftt.security import verify_password, create_access_token
+from ftt.schemas import Token
+from ftt.security import create_access_token, verify_password
 
-# ==============================================================================================================================#
- #                                        ⚙️ C O N F I G  -  R O U T E R                                                       #
-# ==============================================================================================================================#
-router = APIRouter(prefix='/auth',tags=['🔑 | Autenticação'])
+router = APIRouter(prefix='/auth', tags=['auth'])
 
-# ==============================================================================================================================#
- #                                                  📜 P O S T                                                                 #
-# ==============================================================================================================================#
-@router.post('/token', response_model=TokenSchema)
-def login_for_access_token(
-    session=Depends(get_session),
-    form_data: OAuth2PasswordRequestForm = Depends()  
-):
-    user = session.scalar(select(User).where(User.username == form_data.username)
-    )
+OAuth2Form = Annotated[OAuth2PasswordRequestForm, Depends()]
+T_Session = Annotated[Session, Depends(get_db)]  # Alterado para usar get_db
 
-    if not user or not verify_password(form_data.password, user.password):
+
+@router.post('/token', response_model=Token)
+def login_for_access_token(form_data: OAuth2Form, session: T_Session):
+    user = session.scalar(select(User).where(User.email == form_data.username))
+
+    if not user:
         raise HTTPException(
-            status_code=400, detail='Incorrect username or password'
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='Incorrect email or password',
         )
-    access_token = create_access_token(data_payload={'sub': user.username})
 
-    return {'access_token': access_token, 'token_type': 'Bearer'}
+    if not verify_password(form_data.password, user.password):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='Incorrect email or password',
+        )
+
+    access_token = create_access_token(data={'sub': user.email})
+
+    return {'access_token': access_token, 'token_type': 'bearer'}

@@ -1,77 +1,66 @@
-from sqlalchemy.orm import registry, Mapped, relationship, mapped_column
-from sqlalchemy import func, ForeignKey
 from datetime import datetime
+from typing import List, Dict, Any
+from sqlalchemy import func, UniqueConstraint, ForeignKey, JSON
+from sqlalchemy.orm import Mapped, mapped_column, registry, relationship
 
 table_registry = registry()
 
 @table_registry.mapped_as_dataclass
-# ==============================================================================================================================#
- #                                               👤 U S U A R I O S                                                            #                                      
-# ==============================================================================================================================#
 class User:
     __tablename__ = 'users'
 
-    id: Mapped[int] = mapped_column(init=False, primary_key=True)
+    id: Mapped[int] = mapped_column(init=False, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(unique=True)
     password: Mapped[str]
     email: Mapped[str] = mapped_column(unique=True)
-    created_at: Mapped[datetime] = mapped_column(default=func.current_timestamp())
-    updated_at: Mapped[datetime] = mapped_column(default=func.current_timestamp())
-    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(init=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(init=False, server_default=func.now(), onupdate=func.now())
 
-# ==============================================================================================================================#
- #                                                   🏠 S A L A S                                                              #                      
-# ==============================================================================================================================#
-class Room:
-    __tablename__ = 'rooms'
+# Modelo Bloco
+@table_registry.mapped_as_dataclass
+class Bloco:
+    __tablename__ = "blocos"
 
-    id: Mapped[int] = mapped_column(init=False, primary_key=True)
-    number: Mapped[int]
-    capacity: Mapped[int]
-    resource: Mapped[str]
-    exclusive: Mapped[str] = mapped_column(unique=True)
-    block_id: Mapped[int] = mapped_column(ForeignKey("blocks.id"))
+    id: Mapped[int] = mapped_column(init=False, primary_key=True, autoincrement=True)
+    nome: Mapped[str] = mapped_column(unique=True, nullable=False)
+    identificacao: Mapped[str] = mapped_column(unique=True, nullable=False)
 
-    # 👥 Relacionamento: cada sala pertence a um bloco
-    fk_block_with_room: Mapped["Block"] = relationship("Block", back_populates="fk_room_with_block")
-    fk_reservation_with_room: Mapped[list["Reservation"]] = relationship(
-       "Reservation", back_populates="fk_room_with_reservation", cascade='all, delete-orphan')
+    salas: Mapped[List["Sala"]] = relationship("Sala", back_populates="bloco", cascade="all, delete-orphan", init=False)
 
-# ==============================================================================================================================#
- #                                                  🏣  B L O C O S                                                            #                              
-# ==============================================================================================================================#
-class Block:
-    __tablename__ = 'blocks'
+# Modelo Sala
+@table_registry.mapped_as_dataclass
+class Sala:
+    __tablename__ = "salas"
 
-    id: Mapped[int] = mapped_column(init=False, primary_key=True)
-    name: Mapped[str] = mapped_column(unique=True)
-    identifier: Mapped[str]
-        
-    # 👥 Relacionamento: um bloco pode ter várias salas
-    fk_room_with_block: Mapped[list["Room"]] = relationship("Room", back_populates="fk_block_with_room", cascade='all, delete-orphan')
+    id: Mapped[int] = mapped_column(init=False, primary_key=True, autoincrement=True)
+    numero: Mapped[str] = mapped_column(nullable=False)  # Número da sala
+    bloco_id: Mapped[int] = mapped_column(ForeignKey("blocos.id"), nullable=False)  # FK para Bloco
+    capacidade: Mapped[int] = mapped_column(nullable=False)
+    recursos: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=True)  # Lista de recursos disponíveis na sala
+    exclusiva_para: Mapped[str] = mapped_column(nullable=True)  # Curso específico ou NULL
 
-# ==============================================================================================================================#
- #                                                 📓 R E S E R V A S                                                          #                
-# ==============================================================================================================================#
+    bloco: Mapped["Bloco"] = relationship("Bloco", back_populates="salas")
+    reservas: Mapped[List["Reserva"]] = relationship("Reserva", back_populates="sala", cascade="all, delete-orphan", init=False)
 
-class Reservation:
-    __tablename__ = 'reservations'
-    id: Mapped[int] = mapped_column(init=False, primary_key=True)
-    start_time: Mapped[datetime] = mapped_column(default=func.current_timestamp())
-    end_time: Mapped[datetime] = mapped_column(default=func.current_timestamp())
-    coordinator: Mapped[str] = mapped_column(unique=True)
-    reason: Mapped[str]
-    status: Mapped[bool]
+    __table_args__ = (UniqueConstraint("bloco_id", "numero", name="uq_bloco_sala"),)
 
-    # 👥 Relacionamento: cada reserva pertence a uma sala
-    fk_room_with_reservation: Mapped["Room"] = relationship(
-        "Room", back_populates="fk_reservation_with_room"
+# Modelo Reserva
+@table_registry.mapped_as_dataclass
+class Reserva:
+    __tablename__ = "reservas"
+
+    id: Mapped[int] = mapped_column(init=False, primary_key=True, autoincrement=True)
+    sala_id: Mapped[int] = mapped_column(ForeignKey("salas.id"), nullable=False) 
+    sala: Mapped["Sala"] = relationship("Sala", back_populates="reservas", init=False)
+    
+    coordenador: Mapped[str] = mapped_column(nullable=False)
+    motivo: Mapped[str] = mapped_column(nullable=False)
+    data_inicio: Mapped[datetime] = mapped_column(nullable=False)
+    data_fim: Mapped[datetime] = mapped_column(nullable=False)
+    frequencia: Mapped[str] = mapped_column(nullable=True) 
+    
+    recorrente: Mapped[bool] = mapped_column(default=False, nullable=False)  # Movido para o final
+
+    __table_args__ = (
+        UniqueConstraint("sala_id", "data_inicio", "data_fim", name="uq_reserva_sala_horario"),
     )
-
-
-
-    
-
-    
-
-    

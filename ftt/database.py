@@ -1,10 +1,21 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
+from ftt.settings import settings  # Usar a instância única de Settings
 
-from ftt.settings import Settings
+# Criar o motor do banco de dados
+engine = create_engine(
+    settings.DATABASE_URL,  # Usa a instância única de settings
+    pool_size=10,
+    max_overflow=20,
+)
 
-engine = create_engine(Settings().DATABASE_URL)
+# Criar uma fábrica de sessões
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def get_session(): # pragma: no cover
-    with Session(engine) as session:
-        yield session
+# Dependência para obter sessão do banco
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
